@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PTWC GSP5 Command Center (v8.21.0-MASTER)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
+    <script src="https://unpkg.com/lucide-react@latest"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <style>
+        @keyframes nod-head { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(18px) rotate(3deg); } }
+        .animate-nod-heavy { animation: nod-head 4s ease-in-out infinite; transform-origin: center bottom; }
+        @keyframes zzz { 0% { transform: translateY(0) scale(0.6) opacity: 0; } 40% { opacity: 0.8; } 100% { transform: translateY(-80px) scale(1.4) opacity: 0; } }
+        .animate-zzz-1 { animation: zzz 5s linear infinite; }
+        .clock-glow { text-shadow: 0 0 30px rgba(59, 130, 246, 0.5); }
+        .no-select { user-select: none; -webkit-user-select: none; }
+    </style>
+</head>
+<body class="bg-[#020617]">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // ดึงความสามารถจาก Library ออกมาใช้งาน (ผมจัดการแทนการ import ให้แล้วครับ)
+        const { useState, useEffect, useMemo, useCallback, useRef } = React;
+        const { ResponsiveContainer, PieChart, Pie, Cell } = Recharts;
+        const { 
+            Search, LogOut, QrCode, ClipboardList, Clock, ShieldCheck, 
+            History, Plus, Trash2, Download, Database, CheckCheck, 
+            RotateCcw, User, UserCheck, Archive, X, ImageIcon, 
+            Upload, AlertTriangle, CheckCircle2, Loader2, PartyPopper,
+            Camera, Images, UserCheck as UserCheck2
+        } = LucideReact;
+
+        // --- 1. [สำคัญมาก] คุณนทีเอาค่าที่ก๊อปมาจาก Firebase มาวางทับตรงนี้นะครับ ---
+        const firebaseConfig = {
+  apiKey: "AIzaSyA5fjWP11gf8a7E7_o00iy7Gp6HiZg2aHQ",
+  authDomain: "ptw-command.firebaseapp.com",
+  projectId: "ptw-command",
+  storageBucket: "ptw-command.firebasestorage.app",
+  messagingSenderId: "1069631737436",
+  appId: "1:1069631737436:web:88aee2d5cf5e2a0199e099",
+  measurementId: "G-DXDXMFTG8K"
+};
+
+        // เริ่มต้น Firebase
+        if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+        const appId = 'ptw-command-v7-stable';
+
+        // --- 2. เนื้อหาแอป PTWC GSP5 (ตัวระบบที่คุณนทีสร้างไว้) ---
+        const APP_VERSION = "v8.21.0-MASTER-GUARD"; 
+
+        const sanitizeId = (id) => String(id || "").replace(/[^a-zA-Z0-9]/g, '_').trim();
+        const formatDate = (date) => {
+            if (!date) return '';
+            const d = date.seconds ? new Date(date.seconds * 1000) : new Date(date);
+            return new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(d);
+        };
+        const getHealthColor = (percent) => {
+            if (percent < 50) return { main: '#ef4444', glow: 'rgba(239,68,68,0.7)', bg: 'rgba(239,68,68,0.15)' };
+            if (percent < 80) return { main: '#f97316', glow: 'rgba(249,115,22,0.7)', bg: 'rgba(249,115,22,0.15)' };
+            return { main: '#10b981', glow: 'rgba(16,185,129,0.7)', bg: 'rgba(16,185,129,0.15)' };
+        };
+
+        const PTWCBranding = ({ mode = "desktop", scale = 1, layout = "vertical" }) => (
+            <div className={`flex ${layout === "horizontal" ? 'flex-row' : 'flex-col'} items-center gap-4`} style={{ transform: `scale(${scale})` }}>
+                <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center font-black text-white">GSP5</div>
+                <div className="text-white font-black text-xl">PTW GSP5 Command Center</div>
+            </div>
+        );
+
+        const NongNgungMascot = () => (
+            <div className="flex flex-col items-center gap-6">
+                <div className="text-6xl animate-bounce">😴</div>
+                <h2 className="text-2xl font-black text-slate-500 italic uppercase">AI Processing...</h2>
+            </div>
+        );
+
+        // --- ฟังก์ชันหลักของแอป ---
+        function App() {
+            const [operatorName, setOperatorName] = useState(() => localStorage.getItem('wp_user') || '');
+            const [nameInput, setNameInput] = useState('');
+            const [permits, setPermits] = useState([]);
+            const [actions, setActions] = useState({});
+            const [currentTime, setCurrentTime] = useState(new Date());
+
+            useEffect(() => {
+                const clock = setInterval(() => setCurrentTime(new Date()), 1000);
+                return () => clearInterval(clock);
+            }, []);
+
+            if (!operatorName) return (
+                <div className="min-h-screen flex items-center justify-center bg-[#020617] p-10">
+                    <div className="text-center space-y-10">
+                        <PTWCBranding scale={1.8} />
+                        <input className="w-full bg-slate-800 p-6 rounded-3xl text-center text-2xl text-white" placeholder="ระบุชื่อผู้ตรวจสอบ..." value={nameInput} onChange={e => setNameInput(e.target.value)} />
+                        <button className="w-full bg-blue-600 text-white py-6 rounded-3xl text-2xl font-bold" onClick={() => { setOperatorName(nameInput); localStorage.setItem('wp_user', nameInput); }}>เข้าสู่ระบบ</button>
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="min-h-screen bg-[#020617] text-white p-6">
+                    <header className="flex justify-between items-center mb-10 border-b border-white/5 pb-6">
+                        <PTWCBranding layout="horizontal" scale={0.7} />
+                        <div className="text-right">
+                            <p className="text-blue-400 font-black">{operatorName}</p>
+                            <p className="text-sm opacity-50 font-mono">{currentTime.toLocaleTimeString()}</p>
+                        </div>
+                    </header>
+
+                    <main className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <div className="bg-slate-900/50 p-10 rounded-[3rem] border border-white/10 text-center">
+                            <h4 className="text-xs font-black opacity-30 uppercase tracking-widest mb-4">Total Permits</h4>
+                            <p className="text-7xl font-black">{permits.length}</p>
+                        </div>
+                        <div className="bg-slate-900/50 p-10 rounded-[3rem] border border-white/10 text-center">
+                            <h4 className="text-xs font-black opacity-30 uppercase tracking-widest mb-4">Verified</h4>
+                            <p className="text-7xl font-black text-emerald-400">{Object.keys(actions).length}</p>
+                        </div>
+                        <div className="bg-slate-900/50 p-10 rounded-[3rem] border border-white/10 text-center">
+                            <h4 className="text-xs font-black opacity-30 uppercase tracking-widest mb-4">Status</h4>
+                            <p className="text-7xl font-black text-blue-400">READY</p>
+                        </div>
+                    </main>
+
+                    <div className="mt-10 p-20 text-center opacity-20 border-2 border-dashed border-white/10 rounded-[4rem]">
+                         <p className="text-2xl font-black uppercase">รอการเชื่อมต่อฐานข้อมูล...</p>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- สั่งให้แอปทำงาน ---
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
