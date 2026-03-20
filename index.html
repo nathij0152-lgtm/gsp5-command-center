@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PTWC GSP5 Command Center (v8.21.0-MASTER)</title>
+    <title>PTWC GSP5 Command Center</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -13,140 +13,119 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <style>
+        @keyframes nod-head { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(18px) rotate(3deg); } }
+        .animate-nod-heavy { animation: nod-head 4s ease-in-out infinite; transform-origin: center bottom; }
+        .no-select { user-select: none; -webkit-user-select: none; }
+        body { background-color: #020617; color: white; font-family: sans-serif; }
+    </style>
 </head>
-<body class="bg-[#020617]">
+<body>
     <div id="root"></div>
 
     <script type="text/babel">
-        // ดึงความสามารถจาก Library ออกมาใช้งาน (ผมจัดการแทนการ import ให้แล้วครับ)
+        // จัดการดึงเครื่องมือออกมา (แทนการใช้ import)
         const { useState, useEffect, useMemo, useCallback, useRef } = React;
         const { ResponsiveContainer, PieChart, Pie, Cell } = Recharts;
         const { 
             Search, LogOut, QrCode, ClipboardList, Clock, ShieldCheck, 
             History, Plus, Trash2, Download, Database, CheckCheck, 
             RotateCcw, User, UserCheck, Archive, X, ImageIcon, 
-            Upload, AlertTriangle, CheckCircle2, Loader2, PartyPopper,
-            Camera, Images
+            Upload, AlertTriangle, CheckCircle2, Loader2, PartyPopper, Camera, Images
         } = LucideReact;
 
-        // --- 1. [สำคัญมาก] เอาค่าจาก Firebase ของคุณนทีมาใส่ตรงนี้ ---
+        // --- 1. [แก้ไขที่นี่] วางค่าที่ก๊อปมาจาก Firebase ของคุณนทีครับ ---
         const firebaseConfig = {
+
             apiKey: "AIzaSyA5fjWP11gf8a7E7_o00iy7Gp6HiZg2aHQ",
+
             authDomain: "ptw-command.firebaseapp.com",
+
             projectId: "ptw-command",
+
             storageBucket: "ptw-command.firebasestorage.app",
+
             messagingSenderId: "1069631737436",
+
             appId: "1:1069631737436:web:88aee2d5cf5e2a0199e099"
+
         };
 
-        // เริ่มต้น Firebase
+        // เริ่มต้นระบบฐานข้อมูล
         if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
         const db = firebase.firestore();
         const auth = firebase.auth();
         const appId = 'ptw-command-v7-stable';
 
-        // --- 2. ไส้ในแอป (ผมดึงมาจากที่นทีเคยทำไว้ และลบ import ออกให้แล้ว) ---
-        const APP_VERSION = "v8.21.0-MASTER-GUARD"; 
-
-        // ... (ฟังก์ชันเสริมอื่นๆ ผมเตรียมไว้ให้ครบครับ) ...
-        const sanitizeId = (id) => String(id || "").replace(/[^a-zA-Z0-9]/g, '_').trim();
-        const formatDate = (date) => {
-            if (!date) return '';
-            const d = date.seconds ? new Date(date.seconds * 1000) : new Date(date);
-            return new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(d);
-        };
-        const getHealthColor = (percent) => {
-            if (percent < 50) return { main: '#ef4444', glow: 'rgba(239,68,68,0.7)', bg: 'rgba(239,68,68,0.15)' };
-            if (percent < 80) return { main: '#f97316', glow: 'rgba(249,115,22,0.7)', bg: 'rgba(249,115,22,0.15)' };
-            return { main: '#10b981', glow: 'rgba(16,185,129,0.7)', bg: 'rgba(16,185,129,0.15)' };
-        };
-
-        const PTWCBranding = ({ mode = "desktop", scale = 1, layout = "vertical" }) => (
-            <div className={`flex ${layout === "horizontal" ? 'flex-row' : 'flex-col'} items-center gap-4`} style={{ transform: `scale(${scale})` }}>
-                <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center font-black text-white">GSP5</div>
-                <div className="text-white font-black text-xl tracking-tighter">PTW GSP5</div>
-            </div>
-        );
-
-        // --- ตัวแอปหลัก (App Function) ---
+        // --- 2. ตัวแอป PTWC GSP5 (ลบ import ออกให้หมดแล้วครับ) ---
         function App() {
             const [operatorName, setOperatorName] = useState(() => localStorage.getItem('wp_user') || '');
             const [nameInput, setNameInput] = useState('');
             const [permits, setPermits] = useState([]);
-            const [actions, setActions] = useState({});
             const [currentTime, setCurrentTime] = useState(new Date());
 
-            // เชื่อมต่อฐานข้อมูลจริง
             useEffect(() => {
+                const clock = setInterval(() => setCurrentTime(new Date()), 1000);
+                // ดึงข้อมูลจาก Firebase
                 const unsub = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('permits')
                     .onSnapshot(s => setPermits(s.docs.map(d => d.data())));
-                const clock = setInterval(() => setCurrentTime(new Date()), 1000);
-                return () => { unsub(); clearInterval(clock); };
+                return () => { clearInterval(clock); unsub(); };
             }, []);
 
             if (!operatorName) return (
-                <div className="min-h-screen flex items-center justify-center bg-[#020617] p-10 font-sans">
-                    <div className="text-center space-y-10 w-full max-w-sm">
-                        <PTWCBranding scale={1.8} />
-                        <div className="space-y-4">
-                            <input className="w-full bg-slate-900 border border-white/10 p-6 rounded-3xl text-center text-xl text-white outline-none focus:ring-2 ring-blue-500" placeholder="ระบุชื่อผู้ตรวจสอบ..." value={nameInput} onChange={e => setNameInput(e.target.value)} />
-                            <button className="w-full bg-blue-600 text-white py-6 rounded-3xl text-xl font-bold active:scale-95 transition-all shadow-lg" onClick={() => { if(nameInput.trim()){ setOperatorName(nameInput.trim()); localStorage.setItem('wp_user', nameInput.trim()); } }}>เข้าสู่ระบบ</button>
-                        </div>
+                <div className="min-h-screen flex items-center justify-center p-6">
+                    <div className="text-center space-y-8 w-full max-w-sm">
+                        <h1 className="text-4xl font-black text-blue-500">PTW GSP5</h1>
+                        <input className="w-full bg-slate-900 border border-white/10 p-5 rounded-2xl text-center text-white" 
+                               placeholder="ระบุชื่อผู้ตรวจสอบ..." value={nameInput} onChange={e => setNameInput(e.target.value)} />
+                        <button className="w-full bg-blue-600 py-5 rounded-2xl font-bold" 
+                                onClick={() => { if(nameInput.trim()){ setOperatorName(nameInput.trim()); localStorage.setItem('wp_user', nameInput.trim()); } }}>เข้าสู่ระบบ</button>
                     </div>
                 </div>
             );
 
             return (
-                <div className="min-h-screen bg-[#020617] text-white p-6 font-sans">
-                    <header className="flex justify-between items-center mb-10 border-b border-white/5 pb-6">
-                        <PTWCBranding layout="horizontal" scale={0.7} />
+                <div className="p-6 max-w-5xl mx-auto">
+                    <header className="flex justify-between items-center mb-10 border-b border-white/10 pb-6">
+                        <div className="font-black text-2xl text-blue-500">PTWC GSP5</div>
                         <div className="text-right">
-                            <p className="text-blue-400 font-black text-lg">{operatorName}</p>
-                            <p className="text-xs opacity-50 font-mono tracking-widest uppercase">{currentTime.toLocaleTimeString('th-TH')}</p>
+                            <div className="font-bold text-blue-400">{operatorName}</div>
+                            <div className="text-xs opacity-50">{currentTime.toLocaleTimeString()}</div>
                         </div>
                     </header>
 
-                    <main className="space-y-8">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div className="bg-slate-900/50 p-8 rounded-[2.5rem] border border-white/5 text-center shadow-xl">
-                                <h4 className="text-[10px] font-black opacity-30 uppercase tracking-[0.3em] mb-2 text-blue-400">Total Permits</h4>
-                                <p className="text-6xl font-black tabular-nums">{permits.length}</p>
-                            </div>
-                            <div className="bg-slate-900/50 p-8 rounded-[2.5rem] border border-white/5 text-center shadow-xl">
-                                <h4 className="text-[10px] font-black opacity-30 uppercase tracking-[0.3em] mb-2 text-emerald-400">Verified</h4>
-                                <p className="text-6xl font-black text-emerald-400 tabular-nums">0</p>
-                            </div>
-                            <div className="bg-slate-900/50 p-8 rounded-[2.5rem] border border-white/5 text-center shadow-xl">
-                                <h4 className="text-[10px] font-black opacity-30 uppercase tracking-[0.3em] mb-2 text-orange-400">System Status</h4>
-                                <p className="text-5xl font-black text-blue-400">READY</p>
-                            </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                        <div className="bg-slate-900 p-8 rounded-3xl border border-white/5 text-center">
+                            <p className="text-[10px] opacity-30 uppercase tracking-widest mb-2">Total Permits</p>
+                            <p className="text-6xl font-black">{permits.length}</p>
                         </div>
+                        <div className="bg-slate-900 p-8 rounded-3xl border border-white/5 text-center">
+                            <p className="text-[10px] opacity-30 uppercase tracking-widest mb-2">Verified</p>
+                            <p className="text-6xl font-black text-emerald-400">0</p>
+                        </div>
+                        <div className="bg-slate-900 p-8 rounded-3xl border border-white/5 text-center">
+                            <p className="text-[10px] opacity-30 uppercase tracking-widest mb-2">System Status</p>
+                            <p className="text-4xl font-black text-blue-400 pt-3">READY</p>
+                        </div>
+                    </div>
 
-                        <div className="bg-slate-900/80 rounded-[3rem] border border-white/10 overflow-hidden shadow-2xl min-h-[400px]">
-                             <div className="p-6 px-10 border-b border-white/5 bg-white/5 flex justify-between items-center">
-                                <span className="font-black uppercase tracking-widest text-sm opacity-50">Active Work Permits</span>
-                                <span className="text-[10px] bg-blue-600 px-3 py-1 rounded-full font-black uppercase">{APP_VERSION}</span>
-                             </div>
-                             {permits.length === 0 ? (
-                                 <div className="flex flex-col items-center justify-center p-32 opacity-20">
-                                     <Loader2 className="animate-spin mb-4" size={48} />
-                                     <p className="text-xl font-black uppercase italic tracking-widest">Awaiting Data Connection...</p>
-                                 </div>
-                             ) : (
-                                 <div className="p-6 space-y-4">
-                                     {permits.map((p, i) => (
-                                         <div key={i} className="bg-white/5 p-6 rounded-3xl border border-white/5 flex justify-between items-center">
-                                             <div>
-                                                 <p className="text-2xl font-black tracking-tighter">#{p.fullId}</p>
-                                                 <p className="text-xs opacity-50 uppercase font-bold">{p['รายละเอียดงาน'] || 'No details'}</p>
-                                             </div>
-                                             <button className="bg-blue-600 px-6 py-3 rounded-2xl font-black text-xs uppercase shadow-lg">Verify</button>
-                                         </div>
-                                     ))}
-                                 </div>
-                             )}
-                        </div>
-                    </main>
+                    <div className="bg-slate-900/50 rounded-[2rem] border border-white/10 overflow-hidden min-h-[300px] flex flex-col items-center justify-center">
+                        {permits.length === 0 ? (
+                            <div className="text-center opacity-20">
+                                <Loader2 className="animate-spin mx-auto mb-4" size={48} />
+                                <p className="font-black uppercase tracking-widest">Awaiting Data Connection...</p>
+                            </div>
+                        ) : (
+                            <div className="w-full p-6 space-y-4">
+                                {permits.map((p, i) => (
+                                    <div key={i} className="bg-white/5 p-6 rounded-2xl flex justify-between items-center">
+                                        <div className="font-bold text-xl">#{p.fullId}</div>
+                                        <button className="bg-blue-600 px-6 py-2 rounded-xl text-xs font-black uppercase">Verify</button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
             );
         }
