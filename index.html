@@ -1,0 +1,716 @@
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { 
+  Search, CheckCircle, Clock, LogOut, Database, 
+  FileSpreadsheet, X, AlertCircle, Activity, Layers, Camera, Loader2, 
+  Trash2, Archive, History, QrCode, Copy, AlertTriangle,
+  CheckCheck, ShieldCheck, ClipboardList, Briefcase, MapPin, UserCheck, Images, ChevronDown, Plus, Save,
+  ArrowUpRight, Info, LogIn, Shield, User, Download, CheckCircle2, PartyPopper, Check, Upload, Image as ImageIcon, RotateCcw
+} from 'lucide-react';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+
+// Firebase Imports
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { initializeFirestore, collection, doc, setDoc, onSnapshot, writeBatch, serverTimestamp, getDocs, addDoc, query, deleteDoc, orderBy } from 'firebase/firestore';
+
+// --- Configuration (V.8.21.0 MASTER GUARD - 1,000,000% LOCKED) ---
+const APP_VERSION = "v8.21.0-MASTER-GUARD"; 
+const apiKey = ""; 
+
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = initializeFirestore(app, { experimentalForceLongPolling: true });
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'ptw-command-v7-stable';
+
+// --- UTILITIES ---
+const sanitizeId = (id) => String(id || "").replace(/[^a-zA-Z0-9]/g, '_').trim();
+
+const formatDate = (date) => {
+  if (!date) return '';
+  try {
+    const d = date?.seconds ? new Date(date.seconds * 1000) : new Date(date);
+    if (isNaN(d.getTime())) return '';
+    return new Intl.DateTimeFormat('th-TH', {
+      day: 'numeric', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    }).format(d);
+  } catch (e) { return ''; }
+};
+
+const getTimeColor = (date) => {
+    if (!date) return 'text-blue-500';
+    const d = date?.seconds ? new Date(date.seconds * 1000) : new Date(date);
+    const h = d.getHours();
+    const isOrangeTime = (h >= 8 && h < 13) || (h >= 20 || h === 0);
+    return isOrangeTime ? 'text-orange-500' : 'text-blue-500';
+};
+
+const getHealthColor = (percent) => {
+  if (percent < 50) return { main: '#ef4444', glow: 'rgba(239,68,68,0.7)', bg: 'rgba(239,68,68,0.15)' };
+  if (percent < 80) return { main: '#f97316', glow: 'rgba(249,115,22,0.7)', bg: 'rgba(249,115,22,0.15)' };
+  return { main: '#10b981', glow: 'rgba(16,185,129,0.7)', bg: 'rgba(16,185,129,0.15)' };
+};
+
+const getPermitTypeStyle = (type, isMobile = false) => {
+  const t = String(type || "").toLowerCase();
+  const baseClass = `bg-opacity-55 backdrop-blur-md border border-white/40 text-white shadow-sm font-black ${isMobile ? 'text-[9px] py-0.5 px-2 rounded-md' : 'rounded-lg px-3 py-1 text-[11px]'}`;
+  if (t.includes("class i") || t.includes("open flame") || t.includes("ร้อน") || t.includes("สัมผัสเปลวไฟ") || t.includes("ประกายไฟ")) {
+    if (t.includes("non open flame") || t.includes("ไม่มีประกายไฟ")) return `bg-orange-500 ${baseClass}`;
+    return `bg-red-600 ${baseClass}`;
+  }
+  if (t.includes("class ii") || t.includes("non open flame") || t.includes("ไม่มีประกายไฟ")) return `bg-orange-500 ${baseClass}`;
+  if (t.includes("confined space") || t.includes("อับอากาศ")) return `bg-emerald-600 ${baseClass}`;
+  if (t.includes("cold work") || t.includes("ธรรมดา") || t.includes("ทั่วไป")) return `bg-blue-600 ${baseClass}`;
+  return `bg-slate-500 ${baseClass}`;
+};
+
+// --- LOGO BRANDING ---
+const PTWCBranding = ({ mode = "desktop", scale = 1, layout = "vertical" }) => {
+  const isHorizontal = layout === "horizontal";
+  const iconSize = mode === "mobile" ? "w-10 h-10" : "w-14 h-14";
+  return (
+    <div className={`flex ${isHorizontal ? 'flex-row items-center gap-4' : 'flex-col items-center gap-6'} select-none`} style={{ transform: `scale(${scale})` }}>
+      <div className={`${iconSize} relative flex-shrink-0 flex items-center justify-center`}>
+        <div className="absolute inset-0 bg-blue-500/30 blur-2xl rounded-full"></div>
+        <svg viewBox="0 0 100 100" className="w-full h-full relative z-10 drop-shadow-lg">
+          <defs><linearGradient id="logoGradV821" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style={{ stopColor: '#3b82f6' }} /><stop offset="100%" style={{ stopColor: '#10b981' }} /></linearGradient></defs>
+          <path d="M50 5 L85 22 L85 55 C85 75 50 92 50 92 C50 92 15 75 15 55 L15 22 Z" fill="url(#logoGradV821)" />
+          <path d="M35 50 L45 60 L65 40" fill="none" stroke="white" strokeWidth="10" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </div>
+      <div className={`${isHorizontal ? 'text-left border-l-2 border-white/10 pl-4' : 'text-center'}`}>
+        <h1 className={`${isHorizontal ? 'text-2xl' : 'text-5xl md:text-6xl'} font-black tracking-tighter text-white leading-none whitespace-nowrap`}>PTW GSP5</h1>
+        <p className={`${isHorizontal ? 'text-[8px]' : 'text-[10px] md:text-[12px] mt-3'} font-black uppercase tracking-[0.5em] text-white/40 leading-none`}>Command Center</p>
+      </div>
+    </div>
+  );
+};
+
+const NongNgungMascot = () => (
+  <div className="flex flex-col items-center gap-6 animate-in fade-in zoom-in duration-700">
+    <div className="relative w-56 h-56">
+        <div className="absolute top-0 right-0 z-20 pointer-events-none">
+            <span className="text-4xl font-black text-blue-300 absolute -top-8 -right-4 animate-zzz-1">Z</span>
+            <span className="text-2xl font-black text-blue-400 absolute -top-14 -right-12 animate-zzz-2">z</span>
+            <span className="text-lg font-black text-blue-500 absolute -top-18 -right-18 animate-zzz-3">z</span>
+        </div>
+      <svg viewBox="0 0 200 200" className="w-full h-full drop-shadow-[0_20px_40px_rgba(0,0,0,0.5)]">
+        <defs><radialGradient id="bodyGradV821" cx="50%" cy="40%" r="50%"><stop offset="0%" stopColor="#93c5fd" /><stop offset="70%" stopColor="#3b82f6" /><stop offset="100%" stopColor="#1e40af" /></radialGradient></defs>
+        <g className="animate-nod-heavy origin-bottom">
+          <circle cx="100" cy="110" r="75" fill="url(#bodyGradV821)" stroke="white" strokeWidth="1" opacity="0.9" />
+          <g className="stroke-white stroke-[6] fill-none stroke-linecap-round opacity-80"><path d="M60 105 Q80 95 100 105" /><path d="M100 105 Q120 95 140 105" /></g>
+          <path d="M90 135 Q100 145 110 135" stroke="white" strokeWidth="4" fill="none" strokeLinecap="round" opacity="0.6" />
+        </g>
+      </svg>
+      <div className="absolute inset-0 border-[12px] border-blue-400/10 rounded-full animate-ping-slow"></div>
+    </div>
+    <div className="text-center space-y-3">
+      <div className="flex items-center justify-center gap-3"><Loader2 className="animate-spin text-blue-400" size={24} /><h2 className="text-2xl font-black text-slate-500 tracking-widest uppercase italic">AI Processing...</h2></div>
+      <p className="text-slate-400/80 font-bold text-lg animate-pulse">กำลังจัดระเบียบข้อมูลให้พี่อยู่นะครับ</p>
+    </div>
+  </div>
+);
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [operatorName, setOperatorName] = useState(() => localStorage.getItem('wp_user') || '');
+  const [nameInput, setNameInput] = useState('');
+  const [permits, setPermits] = useState([]);
+  const [actions, setActions] = useState({}); 
+  const [historyData, setHistoryData] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isScanning, setIsScanning] = useState(false);
+  const [isAiMode, setIsAiMode] = useState(false); 
+  const [activePulses, setActivePulses] = useState([]);
+  const [undoTimers, setUndoTimers] = useState({}); 
+  const [expandedRows, setExpandedRows] = useState({});
+  const [qrUrl, setQrUrl] = useState(() => localStorage.getItem('wp_qr_img') || '');
+  const [isUploading, setIsUploading] = useState(false);
+  const [currentTab, setCurrentTab] = useState('dashboard');
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showAddWorkModal, setShowAddWorkModal] = useState(false);
+  const [pendingAddItems, setPendingAddItems] = useState([]);
+  const [confirmVerify, setConfirmVerify] = useState(null); 
+  const [confirmVerifyAll, setConfirmVerifyAll] = useState(false);
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [scanAlert, setScanAlert] = useState(null); 
+
+  const cameraInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
+  const qrFileRef = useRef(null);
+
+  const getSupName = useCallback((p) => p['ชื่อผู้ควบคุมงาน'] || p['ผู้ควบคุมงาน'] || p['supervisor'] || '-', []);
+
+  // --- Core Lifecycle ---
+  useEffect(() => {
+    const initAuth = async () => {
+      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await signInWithCustomToken(auth, __initial_auth_token);
+      else await signInAnonymously(auth);
+    };
+    initAuth();
+    onAuthStateChanged(auth, setUser);
+    const resizer = () => { if (window.innerWidth < 1024) setCurrentTab('mobile'); else setCurrentTab('dashboard'); };
+    resizer(); window.addEventListener('resize', resizer);
+    const clock = setInterval(() => setCurrentTime(new Date()), 1000);
+    if (!window.XLSX) {
+      const s = document.createElement("script");
+      s.src = "https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js";
+      document.head.appendChild(s);
+    }
+    return () => { window.removeEventListener('resize', resizer); clearInterval(clock); };
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    const unsubP = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'permits'), s => setPermits(s.docs.map(d => d.data())));
+    const unsubA = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'actions'), s => { 
+        const m = {}; const now = Date.now(); const newPulses = [];
+        s.docs.forEach(d => { 
+            const data = d.data(); m[data.fullId] = data; 
+            if (now - new Date(data.timestamp).getTime() < 5000) newPulses.push(data.fullId);
+        }); 
+        setActions(m); 
+        if (newPulses.length > 0) {
+            setActivePulses(prev => [...new Set([...prev, ...newPulses])]);
+            setTimeout(() => setActivePulses(prev => prev.filter(id => !newPulses.includes(id))), 10000);
+        }
+    });
+    const unsubH = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'history'), s => setHistoryData(s.docs.map(d => ({id: d.id, ...d.data()}))));
+    return () => { unsubP(); unsubA(); unsubH(); };
+  }, [user]);
+
+  useEffect(() => {
+      const timer = setInterval(() => {
+          setUndoTimers(prev => {
+              const next = { ...prev };
+              Object.keys(next).forEach(id => {
+                  if (next[id] <= 0) delete next[id];
+                  else next[id] -= 1;
+              });
+              return next;
+          });
+      }, 1000);
+      return () => clearInterval(timer);
+  }, []);
+
+  // 2. [LOCKED] Standardized Export Function (Main & History)
+  const handleExportExcel = (dataList, filename = "PTW_Audit", actionMap = actions) => {
+    if (!window.XLSX) return;
+    const formatted = dataList.map(p => {
+      const act = actionMap[p.fullId];
+      return {
+          "เลขใบอนุญาต": p.fullId,
+          "ชื่อผู้ตรวจสอบ": act?.operator || '-',
+          "เวลาตรวจสอบ": act ? formatDate(act.timestamp) : 'รอดำเนินการ',
+          "รายละเอียดงาน": p['รายละเอียดงาน'] || '-',
+          "พื้นที่": p['พื้นที่'] || p['อื่น ๆ'] || '-'
+      };
+    });
+    const ws = window.XLSX.utils.json_to_sheet(formatted);
+    // Set Optimal Widths
+    ws['!cols'] = [{wch: 18}, {wch: 25}, {wch: 25}, {wch: 60}, {wch: 30}];
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, "AuditData");
+    window.XLSX.writeFile(wb, `${filename}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const handleAction = async (id) => {
+    if (!user || !id) return;
+    try {
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'actions', sanitizeId(id)), {
+        fullId: String(id), timestamp: new Date().toISOString(), operator: String(operatorName), serverTime: serverTimestamp()
+      });
+      setConfirmVerify(null);
+      setUndoTimers(prev => ({ ...prev, [id]: 60 }));
+      setShowSuccessToast(true); setTimeout(() => setShowSuccessToast(false), 3000);
+    } catch (e) { console.error(e); }
+  };
+
+  const handleUndoAction = async (id) => {
+      if (!user || !id) return;
+      try {
+          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'actions', sanitizeId(id)));
+          setUndoTimers(prev => { const n = {...prev}; delete n[id]; return n; });
+      } catch (e) { console.error(e); }
+  };
+
+  const handleVerifyAllFiltered = async () => {
+    const itemsToVerify = masterListFiltered.filter(p => !actions[p.fullId]);
+    if (!user || itemsToVerify.length === 0) return;
+    setIsUploading(true);
+    try {
+      const batch = writeBatch(db);
+      const now = new Date().toISOString();
+      itemsToVerify.forEach(p => {
+          batch.set(doc(db, 'artifacts', appId, 'public', 'data', 'actions', sanitizeId(p.fullId)), {
+            fullId: String(p.fullId), timestamp: now, operator: String(operatorName), serverTime: serverTimestamp()
+          });
+      });
+      await batch.commit();
+      const newTimers = {};
+      itemsToVerify.forEach(p => newTimers[p.fullId] = 60);
+      setUndoTimers(prev => ({ ...prev, ...newTimers }));
+      setConfirmVerifyAll(false); setSearchQuery(""); setIsAiMode(false);
+      setShowSuccessToast(true); setTimeout(() => setShowSuccessToast(false), 3000);
+    } catch (e) { console.error(e); } finally { setIsUploading(false); }
+  };
+
+  // 1. [LOCKED] AI-Scan Alert Unified Handler (Camera & Gallery)
+  const handleUniversalScan = async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    setIsScanning(true); setSearchQuery(""); setIsAiMode(false);
+    try {
+      const base64 = await new Promise(r => { const rd = new FileReader(); rd.onloadend = () => r(rd.result.split(',')[1]); rd.readAsDataURL(file); });
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: "Extract permit numbers (5-6 digits). Return JSON: ['12345', ...]" }, { inlineData: { mimeType: file.type, data: base64 } }] }],
+          generationConfig: { responseMimeType: "application/json" }
+        })
+      });
+      const data = await res.json();
+      const rawIds = JSON.parse(data.candidates?.[0]?.content?.parts?.[0]?.text || "[]");
+      if (Array.isArray(rawIds) && rawIds.length > 0) {
+        setSearchQuery(rawIds.join(" ")); 
+        setIsAiMode(true); 
+      } else { 
+          // 6. [LOCKED] Unified Manual Close Alert for Both Cases
+          setScanAlert("AI ตรวจสอบไม่พบเลขที่ใบอนุญาตบนรูปภาพนี้ กรุณาถ่ายภาพให้ชัดเจนขึ้น หรือตรวจสอบว่าเป็นใบงาน PTW ที่ถูกต้องครับ (กรณีอัปโหลดจาก Gallery หรือถ่ายใหม่)"); 
+      }
+    } catch (err) { setScanAlert("เกิดข้อผิดพลาดในการเชื่อมต่อระบบสแกน กรุณาลองใหม่อีกครั้งครับ"); } finally { setIsScanning(false); if(e.target) e.target.value = ""; }
+  };
+
+  const masterListFiltered = useMemo(() => {
+    let base = [...permits];
+    if (searchQuery) {
+      const kws = searchQuery.toLowerCase().trim().split(/[ ,]+/);
+      base = base.filter(p => kws.some(k => String(p.fullId).toLowerCase().includes(k) || getSupName(p).toLowerCase().includes(k)));
+    }
+    return base.sort((a, b) => {
+      const actA = actions[a.fullId]; const actB = actions[b.fullId];
+      if (currentTab === 'dashboard') {
+        if (actA && !actB) return -1; if (!actA && actB) return 1;
+        if (actA && actB) return new Date(actB.timestamp) - new Date(actA.timestamp);
+      } else {
+        if (actA && !actB) return 1; if (!actA && actB) return -1;
+      }
+      return getSupName(a).localeCompare(getSupName(b), 'th');
+    });
+  }, [permits, searchQuery, actions, getSupName, currentTab]);
+
+  const stats = useMemo(() => {
+    const total = permits.length; const actioned = Object.keys(actions).length;
+    return { total, actioned, pending: total - actioned, health: total > 0 ? Math.round((actioned / total) * 100) : 0 };
+  }, [permits, actions]);
+
+  const hColor = useMemo(() => getHealthColor(stats.health), [stats.health]);
+
+  if (!operatorName) return (
+    <div className="min-h-screen flex items-center justify-center p-6 bg-[#020617] relative overflow-hidden no-select">
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-900/10 via-transparent to-transparent pointer-events-none"></div>
+      <div className={`bg-[#0f172a]/60 border border-white/10 rounded-[4rem] w-full shadow-[0_0_120px_rgba(0,0,0,0.8)] backdrop-blur-3xl flex flex-col items-center animate-in zoom-in duration-700 
+        ${currentTab === 'mobile' ? 'p-12 max-w-sm' : 'p-20 max-w-4xl'}`} style={currentTab === 'dashboard' ? { transform: 'scale(0.75)' } : {}}>
+        <PTWCBranding layout="vertical" scale={currentTab === 'mobile' ? 1.2 : 1.8} />
+        <form onSubmit={(e) => { e.preventDefault(); if(nameInput.trim()){ setOperatorName(nameInput.trim()); localStorage.setItem('wp_user', nameInput.trim()); } }} 
+          className={`w-full ${currentTab === 'mobile' ? 'mt-12 space-y-6' : 'mt-24 space-y-12'}`}>
+          <div className={`bg-[#1e293b]/80 border border-white/5 shadow-inner p-8 rounded-[3rem] focus-within:ring-2 ring-blue-500/50 transition-all`}>
+            <input type="text" required className="w-full bg-transparent outline-none text-white font-black text-center text-xl sm:text-5xl placeholder:text-white/10 placeholder:text-lg sm:placeholder:text-5xl" placeholder="ระบุชื่อผู้ตรวจสอบ..." value={nameInput} onChange={e => setNameInput(e.target.value)} />
+          </div>
+          <button className="w-full bg-[#2563eb] text-white font-black py-8 rounded-[3rem] text-2xl sm:text-4xl active:scale-95 transition-all shadow-xl hover:bg-blue-600 uppercase tracking-widest">เข้าสู่ระบบ</button>
+        </form>
+        <p className="text-white/10 font-black uppercase tracking-[0.8em] mt-16 text-[12px]">{APP_VERSION}</p>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-[#020617] text-slate-200 font-sans pb-10 bg-safety-master-hero no-select">
+      
+      <header className="bg-[#0f172a]/95 border-b border-white/5 sticky top-0 z-[100] px-6 h-16 flex items-center justify-between backdrop-blur-3xl shadow-2xl">
+        <PTWCBranding layout="horizontal" mode={currentTab === 'mobile' ? "mobile" : "desktop"} scale={0.7} />
+        <div className="flex items-center gap-6">
+            {currentTab !== 'mobile' && (
+                <div className="flex items-center gap-6 pr-6 border-r border-white/5 h-8">
+                    <div className="flex flex-col items-end">
+                        <p className="text-[10px] font-black opacity-30 uppercase tracking-widest text-white/30">Identity</p>
+                        <div className="flex items-center gap-2 text-blue-400 font-black text-sm uppercase leading-none"><User size={12}/> {operatorName}</div>
+                    </div>
+                    <div className="flex flex-col items-end w-24">
+                        <p className="text-[10px] font-black opacity-30 uppercase tracking-widest text-white/30">Time</p>
+                        <p className="text-white font-mono-elegant text-lg leading-none font-black tracking-tighter clock-glow">{currentTime.toLocaleTimeString('th-TH', { hour12: false })}</p>
+                    </div>
+                </div>
+            )}
+            <div className="flex items-center gap-3">
+                <button onClick={() => setShowQRModal(true)} className="p-2.5 bg-blue-600/10 text-blue-500 rounded-xl border border-blue-500/10 active:scale-90"><QrCode size={20}/></button>
+                <button onClick={() => {setOperatorName(''); localStorage.removeItem('wp_user');}} className="p-2.5 opacity-20 hover:text-red-500"><LogOut size={20}/></button>
+            </div>
+        </div>
+      </header>
+
+      {currentTab === 'mobile' && (
+          <div className="p-4 space-y-3 animate-in slide-in-from-top duration-300">
+              <div className="flex items-center gap-2">
+                  <button onClick={() => cameraInputRef.current?.click()} className="flex-1 bg-white/5 border border-white/10 h-12 rounded-xl flex items-center justify-center gap-2 active:scale-95"><Camera size={18} className="text-blue-400"/><span className="text-[11px] font-black uppercase">Camera</span><input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleUniversalScan} /></button>
+                  <button onClick={() => galleryInputRef.current?.click()} className="flex-1 bg-white/5 border border-white/10 h-12 rounded-xl flex items-center justify-center gap-2 active:scale-95"><Images size={18} className="text-blue-400"/><span className="text-[11px] font-black uppercase">Gallery</span><input ref={galleryInputRef} type="file" accept="image/*" className="hidden" onChange={handleUniversalScan} /></button>
+                  {isAiMode && masterListFiltered.some(p => !actions[p.fullId]) && (
+                      <button onClick={() => setConfirmVerifyAll(true)} className="bg-emerald-600 text-white px-5 rounded-xl flex items-center gap-2 shadow-lg animate-in zoom-in h-12">
+                        <CheckCircle2 size={18}/>
+                        <span className="text-[11px] font-black uppercase">Verify all ({masterListFiltered.filter(p => !actions[p.fullId]).length})</span>
+                      </button>
+                  )}
+              </div>
+              <div className="relative h-12">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30" size={20}/>
+                  <input type="text" inputMode="numeric" placeholder="Search Permit IDs..." className="w-full h-full bg-[#1e293b]/80 border border-white/10 rounded-2xl pl-12 pr-4 text-lg font-bold outline-none placeholder:text-white/20" value={searchQuery} onChange={e => {setSearchQuery(e.target.value); if(isAiMode) setIsAiMode(false);}} />
+              </div>
+          </div>
+      )}
+
+      <main className="p-6 max-w-[1900px] mx-auto space-y-10 relative z-10 animate-in fade-in duration-700">
+        
+        {currentTab === 'dashboard' ? (
+          <>
+            <section className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+                <div className="bg-[#0f172a]/80 border border-white/10 lg:col-span-4 p-12 rounded-[5rem] flex flex-col items-center justify-center relative shadow-massive group overflow-hidden">
+                    <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(circle at center, ${hColor.bg} 0%, transparent 70%)` }}></div>
+                    <div className="w-80 h-80 relative">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie data={[{ value: stats.pending || 1 }, { value: stats.actioned }]} cx="50%" cy="50%" innerRadius={105} outerRadius={135} paddingAngle={10} dataKey="value" stroke="none">
+                                    <Cell fill="#1e293b" /><Cell fill={hColor.main} style={{ filter: `drop-shadow(0 0 15px ${hColor.glow})` }} />
+                                </Pie>
+                            </PieChart>
+                        </ResponsiveContainer>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+                            <p className="text-[10px] font-black opacity-30 uppercase tracking-[0.5em] mb-4 text-blue-400">Total Safety</p>
+                            <h4 className="text-[8.5rem] font-black tracking-tighter leading-none text-white">{stats.health}%</h4>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-8">
+                    {[
+                        { label: 'Total Permits', val: stats.total, icon: ClipboardList, color: 'bg-blue-600', valColor: 'text-blue-400' },
+                        { label: 'Pending Audit', val: stats.pending, icon: Clock, color: 'bg-orange-500', valColor: 'text-orange-400' },
+                        { label: 'Safety Verified', val: stats.actioned, icon: ShieldCheck, color: 'bg-emerald-500', valColor: 'text-emerald-400' }
+                    ].map((s, i) => {
+                        const Icon = s.icon;
+                        return (
+                            <div key={i} className="bg-[#0f172a]/90 border border-white/5 p-10 rounded-[4rem] flex flex-col items-center justify-center text-center relative overflow-hidden shadow-massive group">
+                                <Icon className="absolute -top-14 -right-14 opacity-[0.03] group-hover:scale-125 transition-all duration-1000" size={240} />
+                                <div className={`${s.color} p-4 rounded-2xl mb-6 shadow-2xl relative z-10`}><Icon size={24} className="text-white" /></div>
+                                <p className="text-xs font-black opacity-30 uppercase tracking-[0.4em] mb-3 text-blue-400">{s.label}</p>
+                                <h4 className={`text-7xl font-black ${s.valColor} tracking-tighter leading-none tabular-nums relative z-10`}>{s.val}</h4>
+                            </div>
+                        );
+                    })}
+                    <div className="bg-[#0f172a]/60 sm:col-span-3 p-8 rounded-[3.5rem] border border-white/10 flex flex-wrap items-center justify-center gap-8 shadow-inner">
+                        <button onClick={() => setShowHistoryModal(true)} className="px-10 h-14 bg-white/5 rounded-2xl text-[10px] font-black uppercase flex items-center gap-3 border border-white/10 hover:bg-white/10 transition-all"><History size={16}/> History</button>
+                        <label className="cursor-pointer bg-yellow-400/10 text-yellow-400 h-14 px-10 rounded-2xl text-[10px] font-black uppercase flex items-center gap-3 border border-yellow-400/20 active:scale-95 transition-all hover:bg-yellow-400/20"><Plus size={16}/> Add Work<input type="file" accept=".xls,.xlsx" className="hidden" onChange={async (e) => {
+                            const f = e.target.files[0]; if(!f || !window.XLSX) return; setIsUploading(true);
+                            const rd = new FileReader(); rd.onload = async (ev) => {
+                                const wb = window.XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
+                                const worksheet = wb.Sheets[wb.SheetNames[0]];
+                                const jsonData = window.XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+                                const hIdx = jsonData.findIndex(row => row.some(cell => cell && String(cell).includes("เลขที่ใบขออนุญาต")));
+                                if (hIdx === -1) { setIsUploading(false); return; }
+                                const headers = jsonData[hIdx]; const idIdx = headers.findIndex(h => h && String(h).includes("เลขที่ใบขออนุญาต"));
+                                const incoming = jsonData.slice(hIdx + 1).filter(r => r[idIdx]).map(r => {
+                                    const obj = { fullId: String(r[idIdx]).trim() };
+                                    headers.forEach((h, i) => { if(h) obj[String(h).trim()] = r[i]?.toString().trim() || ''; });
+                                    return obj;
+                                });
+                                setPendingAddItems(incoming.filter(inc => !permits.some(p => p.fullId === inc.fullId)));
+                                setShowAddWorkModal(true); setIsUploading(false);
+                            }; rd.readAsArrayBuffer(f);
+                        }} /></label>
+                        
+                        <button onClick={() => setShowResetModal(true)} className="px-10 h-14 bg-red-600/10 text-red-500 rounded-2xl text-[10px] font-black uppercase flex items-center gap-3 border border-red-500/20 hover:bg-red-600/20 transition-all"><Trash2 size={16}/> Reset</button>
+                        
+                        {/* 3. [LOCKED] Standardized Export Trigger */}
+                        <button onClick={() => handleExportExcel(masterListFiltered, "PTW_Dashboard_Report")} className="bg-emerald-600 text-white px-10 h-14 rounded-2xl text-[10px] font-black uppercase active:scale-95 transition-all shadow-lg flex items-center gap-3 hover:bg-emerald-700">
+                            <Download size={18}/> Export Data
+                        </button>
+                        
+                        <label className="cursor-pointer bg-blue-600 text-white h-14 px-14 rounded-2xl text-[10px] font-black uppercase flex items-center gap-3 shadow-lg active:scale-95 transition-all hover:bg-blue-700">
+                            <Database size={16}/> Import new PTW<input type="file" accept=".xls,.xlsx" className="hidden" onChange={async (e) => {
+                                const file = e.target.files[0]; if (!file || !window.XLSX) return;
+                                setIsUploading(true); const rd = new FileReader();
+                                rd.onload = async (ev) => {
+                                    const wb = window.XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
+                                    const json = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+                                    const hIdx = json.findIndex(row => row && row.some(cell => cell && String(cell).includes("เลขที่ใบขออนุญาต")));
+                                    if (hIdx === -1) { setIsUploading(false); return; }
+                                    const batch = writeBatch(db);
+                                    if (permits.length > 0) { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'history'), { sessionDate: new Date().toISOString(), operator: operatorName, total: permits.length, verified: Object.keys(actions).length, health: stats.health, permitData: JSON.stringify(permits), actionData: JSON.stringify(actions) }); }
+                                    const pDocs = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'permits')); pDocs.forEach(d => batch.delete(d.ref));
+                                    const aDocs = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'actions')); aDocs.forEach(d => batch.delete(d.ref));
+                                    const headers = json[hIdx]; const idIdx = headers.findIndex(h => h && String(h).includes("เลขที่ใบขออนุญาต"));
+                                    json.slice(hIdx + 1).filter(r => r && r[idIdx]).forEach(r => {
+                                        const obj = { fullId: String(r[idIdx]).trim() };
+                                        headers.forEach((h, i) => { if(h) obj[String(h).trim()] = r[i]?.toString().trim() || ''; });
+                                        batch.set(doc(db, 'artifacts', appId, 'public', 'data', 'permits', sanitizeId(obj.fullId)), obj);
+                                    });
+                                    await batch.commit(); setIsUploading(false);
+                                }; rd.readAsArrayBuffer(file);
+                            }} />
+                        </label>
+                    </div>
+                </div>
+            </section>
+
+            <section className="bg-[#0f172a]/60 rounded-[4rem] border border-white/10 overflow-hidden shadow-massive flex flex-col">
+                <div className="p-4 px-16 border-b border-white/5 flex items-center gap-10 bg-white/5 h-12">
+                    <Search size={24} className="text-white/40" />
+                    <input type="text" placeholder="Search Permit IDs or Supervisors..." className="bg-transparent text-2xl font-black outline-none flex-1 text-white placeholder:text-white/10 tracking-tighter" value={searchQuery} onChange={e => {setSearchQuery(e.target.value); if(isAiMode) setIsAiMode(false);}} />
+                    {isAiMode && masterListFiltered.some(p => !actions[p.fullId]) && (
+                        <button onClick={() => setConfirmVerifyAll(true)} className="bg-emerald-600 text-white px-8 h-10 rounded-xl text-[10px] font-black uppercase active:scale-95 transition-all shadow-lg flex items-center gap-2 animate-in zoom-in">
+                            <CheckCircle2 size={18}/> Verify all ({masterListFiltered.filter(p => !actions[p.fullId]).length})
+                        </button>
+                    )}
+                </div>
+                <div className="overflow-x-auto max-h-[700px] scroller-y">
+                    <table className="w-full text-left border-collapse">
+                        <thead className="text-[10px] font-black uppercase bg-[#0f172a] opacity-60 sticky top-0 z-20">
+                            <tr><th className="px-16 py-6 text-center">SAFETY AUDIT</th><th className="px-16 py-6">PERMIT ID</th><th className="px-16 py-6">DETAILS & SUPERVISOR</th><th className="px-16 py-8 text-right">AUDITOR LOGS</th></tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                            {masterListFiltered.map((p, idx) => {
+                                const act = actions[p.fullId]; const isNew = activePulses.includes(p.fullId);
+                                const undoSec = undoTimers[p.fullId];
+                                return (
+                                    <tr key={idx} onClick={() => setExpandedRows({...expandedRows, [p.fullId]: !expandedRows[p.fullId]})} className={`transition-all duration-500 cursor-pointer ${isNew ? 'animate-verify-heavy' : act ? 'bg-emerald-500/5' : 'hover:bg-white/5'}`}>
+                                        <td className="px-16 py-8 text-center">
+                                            {act ? (
+                                                undoSec ? (
+                                                    <div className="flex flex-col items-center gap-2 animate-in zoom-in">
+                                                        <button onClick={(e) => { e.stopPropagation(); handleUndoAction(p.fullId); }} className="relative group w-14 h-14 active:scale-90 transition-all">
+                                                            <svg className="undo-circle w-full h-full" viewBox="0 0 36 36">
+                                                                <circle className="stroke-red-500/10" strokeWidth="3" fill="transparent" r="16" cx="18" cy="18"/>
+                                                                <circle className="stroke-red-600" strokeWidth="3" strokeDasharray="100" strokeDashoffset={100 - (undoSec/60 * 100)} strokeLinecap="round" fill="transparent" r="16" cx="18" cy="18"/>
+                                                            </svg>
+                                                            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                                                <RotateCcw size={16} className="text-red-600 mb-0.5 group-hover:rotate-[-90deg] transition-transform"/>
+                                                                <span className="text-[9px] font-black text-red-600 leading-none">{undoSec}s</span>
+                                                            </div>
+                                                        </button>
+                                                        <span className="text-[8px] font-black text-red-600 uppercase tracking-widest">Cancel</span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-emerald-500 font-black text-[10px] uppercase flex flex-col items-center gap-2 animate-in zoom-in">
+                                                        <CheckCheck size={28}/> OK
+                                                    </div>
+                                                )
+                                            ) : (
+                                                <button onClick={(e) => {e.stopPropagation(); setConfirmVerify(p);}} className="bg-blue-600 text-white px-8 py-2.5 rounded-2xl text-[9px] font-black shadow-2xl active:scale-95 transition-all uppercase">Verify</button>
+                                            )}
+                                        </td>
+                                        <td className="px-16 py-8 text-2xl font-black text-white tracking-tighter">{p.fullId}</td>
+                                        <td className="px-16 py-8">
+                                            <div className="flex mb-3"><div className={getPermitTypeStyle(p['ประเภทใบอนุญาต'])}>{p['ประเภทใบอนุญาต'] || 'GENERAL'}</div></div>
+                                            <div className={`font-black text-2xl uppercase text-white leading-tight ${expandedRows[p.fullId] ? '' : 'line-clamp-1'}`}>{p['รายละเอียดงาน'] || '-'}</div>
+                                            <div className="text-[13px] text-blue-400 font-black uppercase italic mt-2">{getSupName(p)}</div>
+                                        </td>
+                                        <td className="px-16 py-8 text-right">
+                                            {act ? (
+                                                <div className="flex flex-col items-end gap-1">
+                                                    <span className="text-3xl font-black uppercase text-white leading-none tracking-tighter flex items-center gap-3"><UserCheck size={28} className="text-emerald-500"/> {act.operator}</span>
+                                                    <span className={`text-3xl font-black font-mono-elegant leading-none mt-2 ${getTimeColor(act.timestamp)}`}>{formatDate(act.timestamp).split(' ').pop()}</span>
+                                                </div>
+                                            ) : <span className="text-[9px] font-black opacity-10 uppercase text-white tracking-widest">Awaiting...</span>}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+          </>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-48 animate-in slide-in-from-bottom duration-500">
+            {masterListFiltered.map((p, i) => {
+                const act = actions[p.fullId]; const isExp = expandedRows[p.fullId];
+                const undoSec = undoTimers[p.fullId];
+                return (
+                    <div key={i} onClick={() => setExpandedRows({...expandedRows, [p.fullId]: !isExp})} className={`bg-[#1e293b]/60 rounded-3xl p-5 text-white shadow-massive border-l-[10px] transition-all relative overflow-hidden ${act && !undoSec ? 'border-emerald-600 opacity-60' : 'border-blue-600'}`}>
+                        <div className="flex justify-between items-start mb-2">
+                          <p className="text-[10px] font-bold uppercase text-white/30 truncate">{getSupName(p)}</p>
+                          <div className="flex items-center gap-3">
+                              {undoSec && (
+                                  <button onClick={(e) => { e.stopPropagation(); handleUndoAction(p.fullId); }} className="relative group w-12 h-12 active:scale-90 transition-all">
+                                      <svg className="undo-circle w-full h-full" viewBox="0 0 36 36">
+                                          <circle className="stroke-red-500/20" strokeWidth="4" fill="transparent" r="16" cx="18" cy="18"/>
+                                          <circle className="stroke-red-600" strokeWidth="4" strokeDasharray="100" strokeDashoffset={100 - (undoSec/60 * 100)} strokeLinecap="round" fill="transparent" r="16" cx="18" cy="18"/>
+                                      </svg>
+                                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                          <RotateCcw size={14} className="text-red-600 mb-0.5"/>
+                                          <span className="text-[9px] font-black text-red-600 leading-none">{undoSec}</span>
+                                      </div>
+                                  </button>
+                              )}
+                              {act && !undoSec && <div className={getTimeColor(act.timestamp)}><ShieldCheck size={20}/></div>}
+                          </div>
+                        </div>
+                        <div className="mb-3"><div className={getPermitTypeStyle(p['ประเภทใบอนุญาต'], true)}>{p['ประเภทใบอนุญาต'] || 'GENERAL'}</div></div>
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                                <h2 className="text-lg font-black tracking-tighter leading-none mb-2">#{p.fullId}</h2>
+                                <p className={`text-[12px] font-bold text-white/60 uppercase leading-tight ${isExp ? '' : 'line-clamp-2'}`}>{p['รายละเอียดงาน'] || '-'}</p>
+                            </div>
+                            {!act && <button onClick={(e) => {e.stopPropagation(); setConfirmVerify(p);}} className="bg-blue-600 text-white font-black px-6 py-4 rounded-2xl text-[13px] uppercase active:scale-90 transition-all mt-1">Verify</button>}
+                        </div>
+                    </div>
+                );
+            })}
+          </div>
+        )}
+      </main>
+
+      {/* --- MODALS --- */}
+      {(isScanning || isUploading) && (
+        <div className="fixed inset-0 z-[2000] bg-black/80 backdrop-blur-xl flex items-center justify-center p-6"><NongNgungMascot /></div>
+      )}
+
+      {/* 6. [LOCKED] Unified Manual Close Alert (Camera/Gallery) */}
+      {scanAlert && (
+          <div className="fixed inset-0 z-[2000] flex items-center justify-center p-8 bg-black/98 backdrop-blur-md">
+              <div className="bg-white p-14 rounded-[4rem] text-center max-w-sm w-full border-t-[18px] border-red-500 shadow-massive animate-in zoom-in">
+                  <div className="text-red-600 mb-10 flex justify-center"><AlertTriangle size={100}/></div>
+                  <h3 className="text-3xl font-black text-slate-900 mb-6 uppercase tracking-tighter leading-tight">สแกนไม่สำเร็จ</h3>
+                  <p className="text-slate-500 text-sm font-bold leading-relaxed mb-10 italic">{scanAlert}</p>
+                  <button onClick={() => setScanAlert(null)} className="w-full bg-slate-950 text-white py-6 rounded-[2.5rem] font-black uppercase text-lg active:scale-95 transition-all">รับทราบและปิดการแจ้งเตือน</button>
+              </div>
+          </div>
+      )}
+
+      {showQRModal && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-8 bg-black/98 animate-in fade-in">
+           <div className="bg-white p-12 rounded-[5rem] text-center max-w-md w-full relative shadow-massive">
+              <button onClick={() => setShowQRModal(false)} className="absolute top-10 right-10 text-slate-300 hover:text-slate-900 transition-all active:scale-90"><X size={32}/></button>
+              <div className="bg-blue-50 p-8 rounded-[4rem] border-4 border-blue-100 flex flex-col items-center my-6 shadow-inner">
+                  <div className="bg-white p-4 rounded-[2.5rem] shadow-2xl mb-8 relative group overflow-hidden">
+                    {qrUrl ? <img src={qrUrl} className="w-60 h-60 object-contain rounded-xl" alt="QR" /> : <div className="w-60 h-60 flex flex-col items-center justify-center text-slate-300 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl"><ImageIcon size={64} className="opacity-20"/><p className="text-[10px] font-black uppercase opacity-40">No QR Image</p></div>}
+                    <label className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"><Upload className="text-white" size={48} /><input ref={qrFileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files[0]; if(!f) return; const rd = new FileReader(); rd.onloadend = () => { setQrUrl(rd.result); localStorage.setItem('wp_qr_img', rd.result); }; rd.readAsDataURL(f); }} /></label>
+                  </div>
+              </div>
+              <button onClick={() => { navigator.clipboard.writeText(window.location.href); }} className="w-full mt-10 py-6 bg-blue-600 text-white rounded-[2.5rem] font-black uppercase text-lg shadow-massive active:scale-95 transition-all">Copy Portal URL</button>
+           </div>
+        </div>
+      )}
+
+      {showHistoryModal && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-black/95 backdrop-blur-3xl animate-in fade-in">
+           <div className="bg-[#0f172a] border border-white/10 w-full max-w-4xl max-h-[85vh] rounded-[5.5rem] shadow-massive flex flex-col text-white">
+                <div className="p-12 border-b border-white/5 flex items-center justify-between"><h3 className="text-4xl font-black uppercase tracking-tighter flex items-center gap-6"><History size={48} /> Audit Archives</h3><button onClick={() => setShowHistoryModal(false)} className="p-6 bg-white/5 rounded-3xl text-white active:scale-90 transition-all"><X size={48}/></button></div>
+                <div className="flex-1 overflow-y-auto p-12 space-y-8 scroller-y">
+                    {historyData.length > 0 ? historyData.sort((a,b) => new Date(b.sessionDate) - new Date(a.sessionDate)).map((h, i) => (
+                        <div key={i} className="bg-white/5 border border-white/5 p-10 rounded-[4.5rem] flex items-center justify-between group hover:bg-white/10 transition-all">
+                            <div className="flex items-center gap-12"><div className="p-9 bg-blue-500/20 text-blue-400 rounded-[3rem] shadow-2xl"><Archive size={48}/></div><div><p className="text-3xl font-black mb-2 tracking-tight">{formatDate(h.sessionDate)}</p><p className="text-[12px] font-black opacity-30 uppercase tracking-[0.4em]">Auditor: {h.operator}</p></div></div>
+                            <div className="flex gap-20 items-center">
+                              <div><p className="text-[11px] opacity-30 uppercase text-center mb-2">Score</p><p className="font-black text-6xl leading-none" style={{ color: getHealthColor(h.health || 0).main }}>{h.health || 0}%</p></div>
+                              {/* 2. [LOCKED] Standardized Export from History */}
+                              <button onClick={() => handleExportExcel(JSON.parse(h.permitData || '[]'), `Archive_${h.id}`, JSON.parse(h.actionData || '{}'))} className="p-8 bg-emerald-600 text-white rounded-[2.5rem] active:scale-90 transition-all shadow-xl shadow-emerald-600/20"><Download size={44}/></button></div>
+                        </div>
+                    )) : <div className="text-center py-20 opacity-10 text-3xl font-black uppercase italic tracking-widest text-white">"NO ARCHIVES"</div>}
+                </div>
+           </div>
+        </div>
+      )}
+
+      {showResetModal && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-black/95 backdrop-blur-md">
+           <div className="bg-slate-900 border border-red-500/50 w-full max-w-sm p-12 rounded-[4.5rem] shadow-massive text-center relative overflow-hidden"><div className="absolute top-0 left-0 w-full h-4 bg-red-600 animate-pulse"></div><div className="flex justify-center mb-10 text-red-500"><AlertTriangle size={80} /></div><h3 className="text-4xl font-black text-white mb-4 uppercase tracking-tighter">System Reset</h3><p className="text-slate-400 text-lg mb-2 font-black italic opacity-80 uppercase tracking-tighter leading-tight">ล้างข้อมูลชุดงานปัจจุบัน</p><p className="text-red-500 text-[10px] font-black uppercase tracking-widest mb-10 animate-pulse">*** จะไม่มีการบันทึกประวัติลง History ***</p><div className="grid grid-cols-2 gap-6 h-24"><button onClick={() => setShowResetModal(false)} className="bg-slate-800 text-white rounded-3xl font-black uppercase active:scale-95 transition-all">Cancel</button><button onClick={async () => {
+               setIsUploading(true); try {
+                   const batch = writeBatch(db);
+                   const pDocs = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'permits')); pDocs.forEach(d => batch.delete(d.ref));
+                   const aDocs = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'actions')); aDocs.forEach(d => batch.delete(d.ref));
+                   await batch.commit(); setShowResetModal(false);
+               } catch (err) { console.error(err); } finally { setIsUploading(false); }
+           }} className="bg-red-600 text-white rounded-[2rem] font-black uppercase shadow-2xl active:scale-95 transition-all shadow-red-500/30">CONFIRM RESET</button></div></div>
+        </div>
+      )}
+
+      {showAddWorkModal && (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-black/95 backdrop-blur-3xl animate-in zoom-in">
+              <div className="bg-white text-slate-900 w-full max-w-2xl p-10 rounded-[4rem] shadow-massive flex flex-col max-h-[85vh]">
+                  <div className="flex items-center justify-between mb-8"><h3 className="text-3xl font-black uppercase tracking-tighter text-yellow-600">New Work Found</h3><button onClick={() => setShowAddWorkModal(false)} className="bg-slate-100 p-3 rounded-2xl active:scale-90 transition-all"><X size={28}/></button></div>
+                  <div className="flex-1 overflow-y-auto scroller-y pr-4 mb-8 space-y-3">
+                      {pendingAddItems.map((p, i) => (
+                          <div key={i} className="bg-slate-100 rounded-2xl p-4 border-l-8 border-yellow-500 shadow-sm">
+                             <div className="flex items-center gap-2 mb-1"><p className="text-[10px] font-bold uppercase text-slate-400 truncate">{getSupName(p)}</p></div>
+                             <h4 className="text-[18px] font-black tracking-tighter leading-none mb-1">#{p.fullId}</h4>
+                             <p className="text-[11px] font-bold text-slate-500 uppercase italic line-clamp-1">{p['รายละเอียดงาน'] || '-'}</p>
+                          </div>
+                      ))}
+                  </div>
+                  <button onClick={async () => {
+                      setIsUploading(true); try {
+                          const batch = writeBatch(db);
+                          pendingAddItems.forEach(r => batch.set(doc(db, 'artifacts', appId, 'public', 'data', 'permits', sanitizeId(r.fullId)), r));
+                          await batch.commit(); setPendingAddItems([]); setShowAddWorkModal(false);
+                      } catch (e) { console.error(e); } finally { setIsUploading(false); }
+                  }} className="w-full bg-yellow-600 text-white py-6 rounded-[2rem] font-black uppercase text-lg shadow-massive active:scale-95 transition-all">Confirm Import All ({pendingAddItems.length})</button>
+              </div>
+          </div>
+      )}
+
+      {confirmVerify && (
+        <div className="fixed inset-0 z-[1100] flex items-center justify-center p-6 bg-black/95 backdrop-blur-md">
+           <div className="bg-white text-slate-900 w-full max-w-sm p-14 rounded-[4rem] border-t-[16px] border-blue-600 shadow-massive animate-in zoom-in">
+              <div className="flex justify-center mb-10 text-blue-600"><ShieldCheck size={100} /></div>
+              <h3 className="text-2xl font-black text-center mb-2 uppercase tracking-tighter">Verify Confirmation</h3>
+              <p className="text-center text-slate-400 text-sm font-bold mb-14 italic leading-relaxed">ยืนยันการตรวจสอบความปลอดภัย <br/> เลขที่ #{confirmVerify.fullId}</p>
+              <div className="grid grid-cols-2 gap-4 h-20"><button onClick={() => setConfirmVerify(null)} className="bg-slate-100 rounded-[2.5rem] font-black text-xs uppercase active:scale-95 transition-all">ยกเลิก</button><button onClick={() => handleAction(confirmVerify.fullId)} className="bg-blue-600 text-white rounded-[2.5rem] font-black text-xs uppercase shadow-2xl active:scale-95 transition-all shadow-blue-500/30">ยืนยันตรวจสอบ</button></div>
+           </div>
+        </div>
+      )}
+
+      {confirmVerifyAll && (
+          <div className="fixed inset-0 z-[2000] flex items-center justify-center p-8 bg-black/95 backdrop-blur-md">
+              <div className="bg-white p-14 rounded-[4rem] text-center max-w-sm w-full border-t-[18px] border-emerald-600 shadow-massive animate-in zoom-in">
+                  <div className="text-emerald-600 mb-10 animate-pulse flex justify-center"><CheckCircle2 size={100}/></div>
+                  <h3 className="text-3xl font-black text-slate-900 mb-4 uppercase tracking-tighter">Verify All</h3>
+                  <p className="text-slate-400 font-bold mb-10 italic">ยืนยันการ Verify ใบงานที่มาจากการสแกนทั้งหมดหรือไม่?</p>
+                  <div className="grid grid-cols-2 gap-4"><button onClick={() => setConfirmVerifyAll(false)} className="bg-slate-100 py-6 rounded-[2.5rem] font-black uppercase text-xs active:scale-95 transition-all">ยกเลิก</button><button onClick={handleVerifyAllFiltered} className="bg-emerald-600 text-white py-6 rounded-[2.5rem] font-black uppercase text-xs shadow-lg active:scale-95 transition-all shadow-emerald-500/30">ยืนยัน</button></div>
+              </div>
+          </div>
+      )}
+
+      {showSuccessToast && <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[3000] bg-emerald-600 text-white px-8 py-4 rounded-full shadow-massive flex items-center gap-4 animate-in slide-in-from-top duration-500"><PartyPopper className="animate-bounce" /><p className="font-black uppercase text-sm tracking-widest">บันทึกเรียบร้อย!</p></div>}
+
+      <footer className="p-20 text-center opacity-10 select-none"><p className="text-[12px] font-black uppercase tracking-[1.5em] text-white">{APP_VERSION}</p></footer>
+      
+      <style>{`
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 20px; }
+        .shadow-massive { box-shadow: 0 60px 120px -30px rgba(0,0,0,0.9); }
+        .scroller-y { overflow-y: auto; scrollbar-gutter: stable; }
+        .no-select { user-select: none; -webkit-user-select: none; }
+        .clock-glow { text-shadow: 0 0 30px rgba(59, 130, 246, 0.5); }
+        .undo-circle { transform: rotate(-90deg); transition: stroke-dashoffset 1s linear; }
+        @keyframes heavy-verify-glow {
+          0% { background-color: rgba(16, 185, 129, 0); box-shadow: 0 0 0 rgba(16, 185, 129, 0); }
+          50% { background-color: rgba(16, 185, 129, 0.3); box-shadow: 0 0 50px rgba(16, 185, 129, 0.6); }
+          100% { background-color: rgba(16, 185, 129, 0); box-shadow: 0 0 0 rgba(16, 185, 129, 0); }
+        }
+        .animate-verify-heavy { animation: heavy-verify-glow 0.8s ease-in-out infinite; }
+        @keyframes nod-head { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(18px) rotate(3deg); } }
+        .animate-nod-heavy { animation: nod-head 4s ease-in-out infinite; transform-origin: center bottom; }
+        @keyframes zzz { 0% { transform: translateY(0) scale(0.6) rotate(-15deg); opacity: 0; } 40% { opacity: 0.8; } 100% { transform: translateY(-80px) scale(1.4) rotate(20deg); opacity: 0; } }
+        .animate-zzz-1 { animation: zzz 5s linear infinite; }
+        .animate-zzz-2 { animation: zzz 5s linear infinite; animation-delay: 1.5s; }
+        .animate-zzz-3 { animation: zzz 5s linear infinite; animation-delay: 3s; }
+        @keyframes ping-slow { 0% { transform: scale(1); opacity: 0.2; } 100% { transform: scale(1.5); opacity: 0; } }
+        .animate-ping-slow { animation: ping-slow 4s cubic-bezier(0, 0, 0.2, 1) infinite; }
+        .bg-safety-master-hero { background-image: url("data:image/svg+xml,%3Csvg width='800' height='1000' viewBox='0 0 150 150' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%2394a3b8' stroke-width='10' opacity='0.04'%3E%3Cpath d='M30 110 C 10 90, 10 60, 35 45' /%3E%3Cpath d='M120 110 C 140 90, 140 60, 115 45' /%3E%3Ccircle cx='75' cy='60' r='8' /%3E%3C/g%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: center 60%; background-size: 65%; background-attachment: fixed; }
+      `}</style>
+    </div>
+  );
+}
