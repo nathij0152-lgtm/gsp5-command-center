@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PTWC GSP5 Command Center (v8.21.0)</title>
+    <title>PTWC GSP5 Command Center</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -17,14 +17,14 @@
         @keyframes nod-head { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(18px) rotate(3deg); } }
         .animate-nod-heavy { animation: nod-head 4s ease-in-out infinite; transform-origin: center bottom; }
         .clock-glow { text-shadow: 0 0 30px rgba(59, 130, 246, 0.5); }
-        body { background-color: #020617; font-family: sans-serif; }
+        body { background-color: #020617; font-family: sans-serif; margin: 0; }
     </style>
 </head>
-<body class="text-white no-select">
+<body class="text-white">
     <div id="root"></div>
 
     <script type="text/babel">
-        // เตรียมเครื่องมือ (ดึงมาใช้งานแทนการ import สีชมพู)
+        // เตรียมเครื่องมือ (ผมจัดการเรื่อง import ให้แล้วครับ ห้ามใส่ import ซ้ำข้างล่างนี้)
         const { useState, useEffect, useMemo, useCallback, useRef } = React;
         const { ResponsiveContainer, PieChart, Pie, Cell } = Recharts;
         const { 
@@ -34,7 +34,7 @@
             Upload, AlertTriangle, CheckCircle2, Loader2, PartyPopper, Camera, Images
         } = LucideReact;
 
-        // --- 1. ใส่ Firebase Config ของคุณนทีให้เรียบร้อยแล้วครับ ---
+        // --- 1. ใส่ Firebase Config จริงของคุณนทีให้แล้วครับ ---
         const firebaseConfig = {
             apiKey: "AIzaSyA5fjWP11gf8a7E7_o00iy7Gp6HiZg2aHQ",
             authDomain: "ptw-command.firebaseapp.com",
@@ -51,7 +51,7 @@
         const auth = firebase.auth();
         const appId = 'ptw-command-v7-stable';
 
-        // --- 2. ตัวแอปหลัก (App Function) ฉบับสมบูรณ์ ---
+        // --- 2. ตัวแอปหลัก (App Function) ---
         function App() {
             const [operatorName, setOperatorName] = useState(() => localStorage.getItem('wp_user') || '');
             const [nameInput, setNameInput] = useState('');
@@ -66,7 +66,6 @@
                 const unsubPermits = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('permits')
                     .onSnapshot(s => setPermits(s.docs.map(d => d.data())));
                 
-                // เชื่อมต่อข้อมูลการ Verify
                 const unsubActions = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('actions')
                     .onSnapshot(s => {
                         const m = {};
@@ -77,14 +76,14 @@
                 return () => { clearInterval(clock); unsubPermits(); unsubActions(); };
             }, []);
 
-            // หน้า Login
+            // หน้าจอเข้าสู่ระบบ
             if (!operatorName) return (
                 <div className="min-h-screen flex flex-col items-center justify-center p-10 bg-[#020617]">
                     <div className="w-20 h-20 bg-blue-600 rounded-3xl mb-8 flex items-center justify-center shadow-[0_0_50px_rgba(37,99,235,0.4)] animate-pulse">
                         <ShieldCheck size={48} className="text-white" />
                     </div>
                     <h1 className="text-5xl font-black text-white mb-2 tracking-tighter">PTW GSP5</h1>
-                    <p className="text-blue-500 font-bold uppercase tracking-[0.4em] text-xs mb-12">Command Center</p>
+                    <p className="text-blue-500 font-bold uppercase tracking-[0.4em] text-[10px] mb-12 text-center">Command Center Dashboard</p>
                     
                     <div className="w-full max-w-sm space-y-4">
                         <input 
@@ -94,55 +93,4 @@
                             onChange={e => setNameInput(e.target.value)} 
                         />
                         <button 
-                            className="w-full bg-blue-600 text-white py-6 rounded-3xl text-xl font-bold active:scale-95 transition-all shadow-xl" 
-                            onClick={() => { if(nameInput.trim()){ setOperatorName(nameInput.trim()); localStorage.setItem('wp_user', nameInput.trim()); } }}
-                        >เข้าสู่ระบบ</button>
-                    </div>
-                </div>
-            );
-
-            return (
-                <div className="min-h-screen bg-[#020617] p-6 text-white">
-                    <header className="flex justify-between items-center mb-10 border-b border-white/5 pb-6">
-                        <div className="flex items-center gap-4">
-                            <div className="p-2 bg-blue-600 rounded-lg"><ShieldCheck size={20}/></div>
-                            <h1 className="text-xl font-black tracking-tighter">PTWC GSP5</h1>
-                        </div>
-                        <div className="text-right">
-                            <p className="text-blue-400 font-black text-lg">{operatorName}</p>
-                            <p className="text-[10px] opacity-50 font-mono tracking-widest uppercase">{currentTime.toLocaleTimeString('th-TH')}</p>
-                        </div>
-                    </header>
-
-                    <main className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 text-center">
-                        <div className="bg-slate-900/50 p-8 rounded-[2.5rem] border border-white/5 shadow-xl">
-                            <p className="text-[10px] font-black opacity-30 uppercase tracking-widest mb-2">Total Permits</p>
-                            <p className="text-6xl font-black tabular-nums">{permits.length}</p>
-                        </div>
-                        <div className="bg-slate-900/50 p-8 rounded-[2.5rem] border border-white/5 shadow-xl">
-                            <p className="text-[10px] font-black opacity-30 uppercase tracking-widest mb-2 text-emerald-400">Verified</p>
-                            <p className="text-6xl font-black text-emerald-400 tabular-nums">{Object.keys(actions).length}</p>
-                        </div>
-                        <div className="bg-slate-900/50 p-8 rounded-[2.5rem] border border-white/5 shadow-xl">
-                            <p className="text-[10px] font-black opacity-30 uppercase tracking-widest mb-2 text-blue-400">System Status</p>
-                            <p className="text-4xl font-black text-blue-500 pt-3 italic">READY</p>
-                        </div>
-                    </main>
-
-                    <div className="bg-slate-900/80 rounded-[3.5rem] border border-white/10 min-h-[400px] shadow-2xl overflow-hidden">
-                        <div className="p-8 border-b border-white/5 bg-white/5 flex justify-between items-center">
-                            <span className="font-black uppercase tracking-widest text-xs opacity-50">Active Worksite Monitor</span>
-                            <div className="flex gap-2">
-                                <button className="p-3 bg-white/5 rounded-xl"><Camera size={18}/></button>
-                                <button className="p-3 bg-white/5 rounded-xl"><Images size={18}/></button>
-                            </div>
-                        </div>
-
-                        {permits.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center p-32 opacity-20">
-                                <Loader2 className="animate-spin mb-4" size={48} />
-                                <p className="font-black uppercase tracking-[0.3em] italic">Awaiting GSP5 Data...</p>
-                            </div>
-                        ) : (
-                            <div className="p-6 space-y-4">
-                                {
+                            className="w-full bg-blue-600 text-white py-6 rounded-3xl text-xl font-bold active:scale-95 transition-all shadow-xl
